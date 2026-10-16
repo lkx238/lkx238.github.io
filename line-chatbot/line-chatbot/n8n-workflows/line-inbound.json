@@ -1,0 +1,100 @@
+{
+  "name": "LINE - Stateless text reply (Gemini)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line-inbound",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "1c648b93-a474-457f-ae0c-65daf901cc11",
+      "name": "LINE inbound",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "line-inbound-stateless"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const input = $input.first()?.json ?? {};\nconst payload = input.body ?? input;\nconst events = Array.isArray(payload.events) ? payload.events : [];\nreturn events.filter((event) => event?.type === 'message' && event?.message?.type === 'text' && typeof event.message.text === 'string' && typeof event.replyToken === 'string').map((event) => ({ json: { text: event.message.text.slice(0, 4000), replyToken: event.replyToken } }));"
+      },
+      "id": "d9c8d9ab-84ec-41ab-9a89-8d2f21451d32",
+      "name": "Keep current text only",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-goog-api-key", "value": "PASTE_GEMINI_API_KEY_HERE" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ systemInstruction: { parts: [{ text: '你是友善、簡潔的繁體中文聊天夥伴。只根據本次訊息回答，不假裝記得過去對話；不知道時坦白說不知道。不要要求或重述密碼、身分證、付款或健康等敏感資料。最多回覆 350 個中文字。' }] }, contents: [{ role: 'user', parts: [{ text: $json.text }] }], generationConfig: { maxOutputTokens: 400, temperature: 0.6 } }) }}",
+        "options": { "timeout": 12000 }
+      },
+      "id": "955b1f72-f7d3-4867-9338-889ca6e8f19e",
+      "name": "Gemini (stateless)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const response = $json;\nconst prepared = $('Keep current text only').item.json;\nconst candidateText = response?.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim();\nconst text = candidateText ? candidateText.slice(0, 4500) : '我現在暫時無法回覆，請稍後再試一次。';\nreturn { json: { replyToken: prepared.replyToken, text } };"
+      },
+      "id": "b49d93aa-c0dd-416d-9797-39da03ccd511",
+      "name": "Build short reply or fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer PASTE_LINE_CHANNEL_ACCESS_TOKEN_HERE" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ replyToken: $json.replyToken, messages: [{ type: 'text', text: $json.text }] }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "18b550ca-a453-4ea3-a797-94ad69719432",
+      "name": "LINE Reply API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1180, 300],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "LINE inbound": { "main": [[{ "node": "Keep current text only", "type": "main", "index": 0 }]] },
+    "Keep current text only": { "main": [[{ "node": "Gemini (stateless)", "type": "main", "index": 0 }]] },
+    "Gemini (stateless)": { "main": [[{ "node": "Build short reply or fallback", "type": "main", "index": 0 }]] },
+    "Build short reply or fallback": { "main": [[{ "node": "LINE Reply API", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "da3fdf90-c485-4d38-95d6-1603bb50067b",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}
