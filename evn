@@ -1,1 +1,14 @@
 
+# Copy to .env and replace every placeholder before starting Compose.
+# Generate a persistent n8n key with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+N8N_ENCRYPTION_KEY=replace-with-a-random-64-character-hex-string
+
+# LINE Developers Console > Messaging API > Channel secret
+LINE_CHANNEL_SECRET=
+
+# These are entered in the imported n8n workflow's HTTP Request nodes.
+# Keep credentials out of the workflow export and source control.
+GEMINI_API_KEY=
+LINE_CHANNEL_ACCESS_TOKEN=
+
+TZ=Asia/Taipei
